@@ -18,8 +18,8 @@ lint:
 test:
   stage: test
   script:
-    - pytest # Предполагается, что вы используете pytest для тестирования
+    - pytest
   artifacts:
     when: always
     reports:
-      junit: test-reports/*.xml # Убедитесь, что у вас определено правильное расширение
+      junit: test-reports/*.xml
