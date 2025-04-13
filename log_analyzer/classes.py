@@ -5,8 +5,7 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from loguru import logger
-
+from log_analyzer.own_logger import logger
 from log_analyzer.settings import log_filename_pattern
 
 

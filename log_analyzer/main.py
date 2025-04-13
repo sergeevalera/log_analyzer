@@ -7,9 +7,8 @@ from pathlib import Path
 from statistics import median
 from typing import Any, Dict, Generator, Optional, Union, cast
 
-from loguru import logger
-
 from log_analyzer.classes import LogAnalyzerConfig, LogFileInfo, LogType, RequestData
+from log_analyzer.own_logger import logger
 from log_analyzer.settings import default_config_path, log_line_pattern
 
 
@@ -126,7 +125,6 @@ def main():
 
     except Exception as e:
         logger.error(e)
-        exit(1)
 
 
 if __name__ == "__main__":

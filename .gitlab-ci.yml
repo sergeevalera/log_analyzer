@@ -1,14 +1,21 @@
-image: python:3.11 # Используйте версию Python, установленную в вашем проекте
+image: python:3.11
 
 stages:
   - lint
   - test
 
+variables:
+  POETRY_VERSION: "1.5.1"
+
 before_script:
+  - curl -sSL https://install.python-poetry.org | python3- --version "$POETRY_VERSION"
   - poetry install
 
 lint:
   stage: lint
+  rules:
+  - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "main"'
+  - when: never
   script:
     - poetry run black .
     - poetry run isort .
@@ -17,8 +24,11 @@ lint:
 
 test:
   stage: test
+  rules:
+  - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "main"'
+  - when: manual
   script:
-    - pytest
+    - pytest --junitxml=test-reports/results.xml
   artifacts:
     when: always
     reports:

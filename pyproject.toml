@@ -9,7 +9,8 @@ packages = [{include = "log_analyzer"}]
 [tool.poetry.dependencies]
 python = "^3.10"
 argparse = "^1.4.0"
-loguru = "^0.7.3"
+pytest = "^8.3.5"
+structlog = "^25.2.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^25.1.0"
