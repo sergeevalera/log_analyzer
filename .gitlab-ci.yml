@@ -1,0 +1,25 @@
+image: python:3.11 # Используйте версию Python, установленную в вашем проекте
+
+stages:
+  - lint
+  - test
+
+before_script:
+  - poetry install
+
+lint:
+  stage: lint
+  script:
+    - poetry run black .
+    - poetry run isort .
+    - poetry run flake8 .
+    - poetry run mypy .
+
+test:
+  stage: test
+  script:
+    - pytest # Предполагается, что вы используете pytest для тестирования
+  artifacts:
+    when: always
+    reports:
+      junit: test-reports/*.xml # Убедитесь, что у вас определено правильное расширение
