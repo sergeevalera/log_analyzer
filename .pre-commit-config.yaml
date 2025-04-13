@@ -1,0 +1,30 @@
+repos:
+  - repo: local
+    hooks:
+      - id: black
+        name: black (python)
+        language: python
+        entry: poetry run black
+        files: \.py$
+        types: [python]
+
+      - id: flake8
+        name: flake8 (python)
+        language: python
+        entry: poetry run flake8
+        files: \.py$
+        types: [python]
+
+      - id: isort
+        name: isort (python)
+        language: python
+        entry: poetry run isort
+        files: \.py$
+        types: [python]
+
+      - id: mypy
+        name: mypy (python)
+        language: python
+        entry: poetry run mypy
+        files: \.py$
+        types: [python]

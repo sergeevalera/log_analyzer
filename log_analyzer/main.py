@@ -42,8 +42,7 @@ def get_last_log_file(log_dir: Path) -> Optional[LogFileInfo]:
             if curr_file.is_nginx_log:
                 if not last_file:
                     last_file = curr_file
-                # here we have just objects with not-None .date_parsed value, so we mute mypy alert
-                elif curr_file.date_parsed > last_file.date_parsed:  # type: ignore
+                elif curr_file.date_parsed > last_file.date_parsed:
                     last_file = curr_file
     return last_file
 
@@ -77,9 +76,9 @@ def analyze_file_content(
         if line_parsed := parse_single_line(line_content):
             parsed_lines += 1
             request_time += line_parsed.request_time
-            count[line_parsed.remote_addr] += 1
-            time_sum[line_parsed.remote_addr] += line_parsed.request_time
-            request_time_lists[line_parsed.remote_addr].append(line_parsed.request_time)
+            count[line_parsed.request_url] += 1
+            time_sum[line_parsed.request_url] += line_parsed.request_time
+            request_time_lists[line_parsed.request_url].append(line_parsed.request_time)
 
     for url in [k for k, v in sorted(time_sum.items(), key=lambda item: item[1], reverse=True)][
         :report_size
@@ -104,24 +103,30 @@ def generate_report(file_to_analyze: LogFileInfo, config: LogAnalyzerConfig):
     with open("log_analyzer/report.html", "r") as report_template_file:
         report_template = report_template_file.read()
 
-    report_line_generator = analyze_file_content(file_to_analyze, config.report_size)
-    report_path = report_dir / f"report-{file_to_analyze.date_parsed.strftime('%Y-%m-%d')}.html"
+    report_path = report_dir / f"report-{file_to_analyze.date_parsed.strftime('%Y.%m.%d')}.html"
 
     with open(report_path, "w") as report_file:
         report_file.write(
-            report_template.replace("$table_json", json.dumps(list(report_line_generator)))
+            report_template.replace(
+                "$table_json",
+                json.dumps(list(analyze_file_content(file_to_analyze, config.report_size))),
+            )
         )
 
 
 def main():
-    args = get_namespace()
-    config = get_config(args)
-    last_log_file = get_last_log_file(config.log_dir)
-    if not last_log_file:
-        logger.info("Log directory doesn't contain any nginx log file")
-    else:
-        logger.info(f"Last log file in selected directory is {last_log_file.filepath}")
-        generate_report(file_to_analyze=last_log_file, config=config)
+    try:
+        args = get_namespace()
+        config = get_config(args)
+        if last_log_file := get_last_log_file(config.log_dir):
+            logger.info(f"Last log file in selected directory is {last_log_file.filepath}")
+            generate_report(file_to_analyze=last_log_file, config=config)
+        else:
+            logger.info("Log directory doesn't contain any nginx log file")
+
+    except Exception as e:
+        logger.error(e)
+        exit(1)
 
 
 if __name__ == "__main__":
