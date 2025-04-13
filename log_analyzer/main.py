@@ -8,7 +8,7 @@ from statistics import median
 from typing import Any, Dict, Generator, Optional, Union, cast
 
 from log_analyzer.classes import LogAnalyzerConfig, LogFileInfo, LogType, RequestData
-from log_analyzer.own_logger import logger
+from log_analyzer.own_logger import logger, structlog_configure
 from log_analyzer.settings import default_config_path, log_line_pattern
 
 
@@ -29,7 +29,6 @@ def get_config(args: argparse.Namespace) -> LogAnalyzerConfig:
             config = config | {k: v for k, v in new_config.items() if k in config}
         except (json.decoder.JSONDecodeError, FileNotFoundError):
             raise RuntimeError(f"Impossible to read the config file {config_path}.")
-    logger.info(f"Config: {config}")
     return LogAnalyzerConfig.from_dict(config)
 
 
@@ -61,7 +60,7 @@ def parse_single_line(content_line: str) -> Optional[RequestData]:
 
 
 def analyze_file_content(
-    log_file: LogFileInfo, report_size: int
+    log_file: LogFileInfo, config: LogAnalyzerConfig
 ) -> Generator[Dict[str, Union[str, float, None]], None, None]:
     total_lines = 0
     parsed_lines = 0
@@ -78,9 +77,10 @@ def analyze_file_content(
             count[line_parsed.request_url] += 1
             time_sum[line_parsed.request_url] += line_parsed.request_time
             request_time_lists[line_parsed.request_url].append(line_parsed.request_time)
-
+    if parsed_lines / total_lines * 100 >= config.treshold_error_perc:
+        raise RuntimeError("Too many unparsable lines. Report wouldn't be created.")
     for url in [k for k, v in sorted(time_sum.items(), key=lambda item: item[1], reverse=True)][
-        :report_size
+        : config.report_size
     ]:
         yield {
             "url": url,
@@ -94,7 +94,7 @@ def analyze_file_content(
         }
 
 
-def generate_report(file_to_analyze: LogFileInfo, config: LogAnalyzerConfig):
+def generate_report(file_to_analyze: LogFileInfo, config: LogAnalyzerConfig) -> None:
     report_dir = Path(config.report_dir)
     if not report_dir.exists():
         report_dir.mkdir(parents=True)
@@ -108,23 +108,33 @@ def generate_report(file_to_analyze: LogFileInfo, config: LogAnalyzerConfig):
         report_file.write(
             report_template.replace(
                 "$table_json",
-                json.dumps(list(analyze_file_content(file_to_analyze, config.report_size))),
+                json.dumps(list(analyze_file_content(file_to_analyze, config))),
             )
         )
+    logger.info(f"Report generated. It's available at {report_path}")
 
 
-def main():
+def main() -> None:
     try:
         args = get_namespace()
         config = get_config(args)
+        structlog_configure(own_log_filepath=config.own_log_filepath)
+        logger.info(f"Config: {config}")
+        logger.info(
+            "Structlog configured succesfully."
+            + f" Logs will be saved to {config.own_log_filepath}.json."
+            * bool(config.own_log_filepath)
+        )
+
         if last_log_file := get_last_log_file(config.log_dir):
             logger.info(f"Last log file in selected directory is {last_log_file.filepath}")
             generate_report(file_to_analyze=last_log_file, config=config)
         else:
             logger.info("Log directory doesn't contain any nginx log file")
-
-    except Exception as e:
-        logger.error(e)
+    except Exception:
+        logger.error("Impossible to finish analyzis", exc_info=True)
+    except BaseException:
+        logger.error("BaseException catched! Impossible to finish analyzis.", exc_info=True)
 
 
 if __name__ == "__main__":

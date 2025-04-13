@@ -12,8 +12,10 @@ from log_analyzer.settings import log_filename_pattern
 @dataclass
 class LogAnalyzerConfig:
     report_size: int
+    treshold_error_perc: float
     report_dir: Path
     log_dir: Path
+    own_log_filepath: Optional[Path]
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "LogAnalyzerConfig":
@@ -27,6 +29,11 @@ class LogAnalyzerConfig:
             log_dir.mkdir(parents=True, exist_ok=True)
             logger.info(f"Directory {cls.log_dir} has been created.")
         normalized_data["log_dir"] = log_dir
+        normalized_data["own_log_filepath"] = (
+            Path(normalized_data["own_log_filepath"])
+            if normalized_data["own_log_filepath"]
+            else None
+        )
         return cls(**normalized_data)
 
 
