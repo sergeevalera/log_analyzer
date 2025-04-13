@@ -7,6 +7,8 @@ from typing import Any, Dict, Optional
 
 from loguru import logger
 
+from log_analyzer.settings import log_filename_pattern
+
 
 @dataclass
 class LogAnalyzerConfig:
@@ -39,11 +41,10 @@ class LogFileInfo:
     filepath: Path
     is_nginx_log: bool = False
     file_extension: Optional[LogType] = None
-    date_parsed: Optional[date] = None
+    date_parsed: date = datetime.min
 
     def __post_init__(self):
-        pattern = r"^nginx-access-ui\.log-\d{8}(\.gz)?$"
-        compiled_re = re.compile(pattern)
+        compiled_re = re.compile(log_filename_pattern)
         if compiled_re.match(self.filepath.name):
             file_data = self.filepath.name.replace("nginx-access-ui.log-", "").split(".")
             if file_data[-1] == "gz":
@@ -57,3 +58,36 @@ class LogFileInfo:
                 self.is_nginx_log = False
         else:
             self.is_nginx_log = False
+
+
+@dataclass
+class RequestData:
+    remote_addr: str
+    remote_user: Optional[str]
+    http_x_real_ip: Optional[str]
+    time_local: str
+    request_method: str
+    request_url: str
+    request_protocol: str
+    status: int
+    body_bytes_sent: int
+    http_referer: Optional[str]
+    http_user_agent: Optional[str]
+    http_x_forwarded_for: Optional[str]
+    http_X_REQUEST_ID: Optional[str]
+    http_X_RB_USER: Optional[str]
+    request_time: float
+
+    def __post_init__(self):
+        self.status = int(self.status)
+        self.remote_user = None if self.remote_user == "-" else self.remote_user
+        self.http_x_real_ip = None if self.http_x_real_ip == "-" else self.http_x_real_ip
+        self.body_bytes_sent = int(self.body_bytes_sent)
+        self.http_referer = None if self.http_referer == "-" else self.http_referer
+        self.http_user_agent = None if self.http_user_agent == "-" else self.http_user_agent
+        self.http_x_forwarded_for = (
+            None if self.http_x_forwarded_for == "-" else self.http_x_forwarded_for
+        )
+        self.http_X_REQUEST_ID = None if self.http_X_REQUEST_ID == "-" else self.http_X_REQUEST_ID
+        self.http_X_RB_USER = None if self.http_X_RB_USER == "-" else self.http_X_RB_USER
+        self.request_time = float(self.request_time)

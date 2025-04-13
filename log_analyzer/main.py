@@ -1,12 +1,16 @@
 import argparse
+import gzip
 import json
+import re
+from collections import defaultdict
 from pathlib import Path
-from typing import Optional
+from statistics import median
+from typing import Any, Dict, Generator, Optional, Union, cast
 
 from loguru import logger
 
-from log_analyzer.classes import LogAnalyzerConfig, LogFileInfo
-from log_analyzer.settings import default_config_path
+from log_analyzer.classes import LogAnalyzerConfig, LogFileInfo, LogType, RequestData
+from log_analyzer.settings import default_config_path, log_line_pattern
 
 
 def get_namespace() -> argparse.Namespace:
@@ -38,14 +42,75 @@ def get_last_log_file(log_dir: Path) -> Optional[LogFileInfo]:
             if curr_file.is_nginx_log:
                 if not last_file:
                     last_file = curr_file
-                # here we have just objects with not None in .date_parsed, so we ignore mypy alert
+                # here we have just objects with not-None .date_parsed value, so we mute mypy alert
                 elif curr_file.date_parsed > last_file.date_parsed:  # type: ignore
                     last_file = curr_file
     return last_file
 
 
-def analyze(config: LogFileInfo) -> None:
-    pass
+def get_file_content_by_lines(file: LogFileInfo) -> Generator[str, None, None]:
+    open_func = open if file.file_extension == LogType.plain else gzip.open
+    file_content = open_func(file.filepath, "rt")
+    for content_line in file_content:
+        yield content_line
+    file_content.close()
+
+
+def parse_single_line(content_line: str) -> Optional[RequestData]:
+    if match := re.compile(log_line_pattern).match(content_line):
+        return RequestData(**cast(Dict[str, Any], match.groupdict()))
+    return None
+
+
+def analyze_file_content(
+    log_file: LogFileInfo, report_size: int
+) -> Generator[Dict[str, Union[str, float, None]], None, None]:
+    total_lines = 0
+    parsed_lines = 0
+    request_time = 0.0  # total for all requests
+    count: Dict[str, int] = defaultdict(int)
+    time_sum: Dict[str, float] = defaultdict(float)
+    request_time_lists = defaultdict(list)
+
+    for line_content in get_file_content_by_lines(log_file):
+        total_lines += 1
+        if line_parsed := parse_single_line(line_content):
+            parsed_lines += 1
+            request_time += line_parsed.request_time
+            count[line_parsed.remote_addr] += 1
+            time_sum[line_parsed.remote_addr] += line_parsed.request_time
+            request_time_lists[line_parsed.remote_addr].append(line_parsed.request_time)
+
+    for url in [k for k, v in sorted(time_sum.items(), key=lambda item: item[1], reverse=True)][
+        :report_size
+    ]:
+        yield {
+            "url": url,
+            "count": count[url],
+            "count_perc": count[url] / parsed_lines * 100,
+            "time_sum": time_sum[url],
+            "time_perc": time_sum[url] / request_time * 100,
+            "time_avg": time_sum[url] / count[url],
+            "time_max": max(request_time_lists[url]),
+            "time_med": median(request_time_lists[url]),
+        }
+
+
+def generate_report(file_to_analyze: LogFileInfo, config: LogAnalyzerConfig):
+    report_dir = Path(config.report_dir)
+    if not report_dir.exists():
+        report_dir.mkdir(parents=True)
+
+    with open("log_analyzer/report.html", "r") as report_template_file:
+        report_template = report_template_file.read()
+
+    report_line_generator = analyze_file_content(file_to_analyze, config.report_size)
+    report_path = report_dir / f"report-{file_to_analyze.date_parsed.strftime('%Y-%m-%d')}.html"
+
+    with open(report_path, "w") as report_file:
+        report_file.write(
+            report_template.replace("$table_json", json.dumps(list(report_line_generator)))
+        )
 
 
 def main():
@@ -53,10 +118,10 @@ def main():
     config = get_config(args)
     last_log_file = get_last_log_file(config.log_dir)
     if not last_log_file:
-        logger.info("Log directory doesn't contain any ngins log file")
+        logger.info("Log directory doesn't contain any nginx log file")
     else:
         logger.info(f"Last log file in selected directory is {last_log_file.filepath}")
-        analyze(last_log_file)
+        generate_report(file_to_analyze=last_log_file, config=config)
 
 
 if __name__ == "__main__":
