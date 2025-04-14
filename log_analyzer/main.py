@@ -119,7 +119,7 @@ def main() -> None:
         args = get_namespace()
         config = get_config(args)
         structlog_configure(own_log_filepath=config.own_log_filepath)
-        logger.info(f"Config: {config}")
+        logger.info("Config: " + str(config.__dict__))
         logger.info(
             "Structlog configured succesfully."
             + f" Logs will be saved to {config.own_log_filepath}.json."
