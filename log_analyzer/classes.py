@@ -47,7 +47,7 @@ class LogFileInfo:
     filepath: Path
     is_nginx_log: bool = False
     file_extension: Optional[LogType] = None
-    date_parsed: date = datetime.min
+    date_parsed: date = date.min
 
     def __post_init__(self):
         compiled_re = re.compile(log_filename_pattern)
