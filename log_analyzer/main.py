@@ -48,8 +48,23 @@ def get_last_log_file(log_dir: Path) -> Optional[LogFileInfo]:
 
 
 def get_file_content_by_lines(file: LogFileInfo) -> Generator[str, None, None]:
+
     open_func = open if file.file_extension == LogType.plain else gzip.open
-    file_content = open_func(file.filepath, "rt")
+    try:
+        file_content = open_func(file.filepath, "rt")
+    except FileNotFoundError:
+        logger.error(f"File not found: {file.filepath}")
+        raise RuntimeError(f"Log file {file.filepath} not found")
+    except PermissionError:
+        logger.error(f"Permission denied when trying to read file: {file.filepath}")
+        raise RuntimeError(f"Permission denied when trying to read log file {file.filepath}")
+    except gzip.BadGzipFile:
+        logger.error(f"Invalid gzip file format: {file.filepath}")
+        raise RuntimeError(f"Invalid gzip file format: {file.filepath}")
+    except IOError as e:
+        logger.error(f"IO error when reading file {file.filepath}: {str(e)}")
+        raise RuntimeError(f"IO error when reading log file {file.filepath}: {str(e)}")
+
     for content_line in file_content:
         yield content_line
     file_content.close()
@@ -101,10 +116,17 @@ def generate_report(file_to_analyze: LogFileInfo, config: LogAnalyzerConfig) -> 
     if not report_dir.exists():
         report_dir.mkdir(parents=True)
 
+    report_path = report_dir / f"report-{file_to_analyze.date_parsed.strftime('%Y.%m.%d')}.html"
+
+    if report_path.exists():
+        logger.info(
+            f"Report for date {file_to_analyze.date_parsed.strftime('%Y.%m.%d')} "
+            f"already exists at {report_path}"
+        )
+        return
+
     with open("log_analyzer/report.html", "r") as report_template_file:
         report_template = report_template_file.read()
-
-    report_path = report_dir / f"report-{file_to_analyze.date_parsed.strftime('%Y.%m.%d')}.html"
 
     with open(report_path, "w") as report_file:
         report_file.write(
