@@ -35,13 +35,15 @@ def get_config(args: argparse.Namespace) -> LogAnalyzerConfig:
 def get_last_log_file(log_dir: Path) -> Optional[LogFileInfo]:
     last_file = None
     for file in log_dir.iterdir():
-        if file.is_file():
-            curr_file = LogFileInfo(file)
-            if curr_file.is_nginx_log:
-                if not last_file:
-                    last_file = curr_file
-                elif curr_file.date_parsed > last_file.date_parsed:
-                    last_file = curr_file
+        if not file.is_file():
+            return None
+        curr_file = LogFileInfo(file)
+        if not curr_file.is_nginx_log:
+            return None
+        if not last_file:
+            last_file = curr_file
+        elif curr_file.date_parsed > last_file.date_parsed:
+            last_file = curr_file
     return last_file
 
 
